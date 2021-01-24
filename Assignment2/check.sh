@@ -19,6 +19,7 @@ passes=0
 for f in {1..10}
 do
   cnt=`shuf -i 64-128 -n 1`
+  #printf "%3s: " $cnt
   ./sort -m $cnt > sort.out
   if (( $? != 0 )) 
   then
@@ -48,6 +49,7 @@ echo ""
 for f in {1..10}
 do
   cnt=`shuf -i 768-1280 -n 1`
+  #printf "%4s: " $cnt
   (time ./sort -s $cnt) &> sort.out
   fail=`grep FAIL sort.out | wc -l`
   if (( fail > 0 ))
@@ -58,7 +60,7 @@ do
     ./sort -m 128 > /dev/null
     if (( $? != 0 )) 
     then
-        echo "       Speedup: FAIL   (program error)" | tee sort.out
+        echo "      Speedup: FAIL   (program error)" | tee sort.out
     else 
         (time ./sort -m $cnt) &> sort.out
         fail=`grep FAIL sort.out | wc -l`
@@ -70,9 +72,9 @@ do
           spd=`echo "scale=2; $ssecs / $msecs" | bc -l`
           if [ 1 -eq "$(echo "${spd} > ${speedup}" | bc)" ]
           then
-           echo "       Speedup: PASS   ($spd times faster)" | tee sort.out
+           echo "      Speedup: PASS   ($spd times faster)" | tee sort.out
          else
-           echo "       Speedup: FAIL   ($spd times faster)" | tee sort.out
+           echo "      Speedup: FAIL   ($spd times faster)" | tee sort.out
          fi
        fi
     fi
@@ -92,7 +94,6 @@ then
 fi
 printf "%20s:  %2d/%2d  %5.1f%%\n" "Non-Functional" $pass $total $pct
 echo "" 
-
 
 rm test.out
 rm sort.out
