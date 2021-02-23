@@ -37,6 +37,22 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/*sorting function*/
+bool cond_list_less(const struct list_elem* a,const struct list_elem* b, void* aux){
+  struct semaphore *sem_a;
+  struct semaphore *sem_b;
+  sem_a=list_entry(a, struct semaphore, elem);
+  sem_b=list_entry(b, struct semaphore, elem);
+
+  list_sort(&sem_a->waiters, list_less, NULL);
+  list_sort(&sem_b->waiters, list_less, NULL);
+
+  int a_prio = (list_entry(list_begin(&sem_a->waiters),struct thread, elem))->priority;
+  int b_prio = (list_entry(list_begin(&sem_b->waiters),struct thread, elem))->priority;
+  return a_prio>b_prio;
+}
+
+
 /* 
  * Initializes condition variable COND.  A condition variable
  * allows one piece of code to signal a condition and cooperating
@@ -105,6 +121,7 @@ condvar_signal(struct condvar *cond, struct lock *lock UNUSED)
     ASSERT(lock_held_by_current_thread(lock));
 
     if (!list_empty(&cond->waiters)) {
+        list_sort(&cond->waiters, cond_list_less, NULL);
         semaphore_up(list_entry(list_pop_front(&cond->waiters), struct semaphore, elem));
     }
 }

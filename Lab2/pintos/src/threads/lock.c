@@ -32,10 +32,14 @@
 
 #include <stdio.h>
 #include <string.h>
+//#include <math.h>
 
 #include "threads/lock.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "devices/timer.h"
+//#include <uuid/uuid.h>
+
 
 /* 
  * Initializes LOCK.  A lock can be held by at most a single
@@ -61,6 +65,9 @@ lock_init(struct lock *lock)
 
     lock->holder = NULL;
     semaphore_init(&lock->semaphore, 1);
+    
+    lock->id[0]=timer_ticks();
+    lock->id[1]=timer_ticks();
 }
 
 /* 
@@ -80,8 +87,11 @@ lock_acquire(struct lock *lock)
     ASSERT(!intr_context());
     ASSERT(!lock_held_by_current_thread(lock));
 
-    semaphore_down(&lock->semaphore);
+    
+    //semaphore_down(&lock->semaphore);
+    semaphore_down_lock(&lock->semaphore, lock->holder, lock->elem);
     lock->holder = thread_current();
+    thread_check();
 }
 
 /* 
@@ -115,11 +125,14 @@ lock_try_acquire(struct lock *lock)
 void
 lock_release(struct lock *lock)
 {
+    struct thread *temp = lock->holder;
     ASSERT(lock != NULL);
     ASSERT(lock_held_by_current_thread(lock));
-
+    //thread_priority_restore(lock->holder, lock->elem);
     lock->holder = NULL;
     semaphore_up(&lock->semaphore);
+    thread_priority_restore(temp, lock->elem);
+    thread_check();
 }
 
 /* 

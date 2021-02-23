@@ -87,7 +87,16 @@ struct thread {
     char name[16]; /* Name (for debugging purposes). */
     uint8_t *stack; /* Saved stack pointer. */
     int priority; /* Priority. */
+    int realPriority; /*store original prio for priority donation*/
+    struct list oldPriority; /*store stacks prio for priority donation*/
+    struct list_elem prioelem;
+    struct thread *pdCurr; /*current priority donator*/
+    struct list locks;
+    struct thread *donated;
+    int prioDon;
+    struct list_elem lockelem;
     struct list_elem allelem; /* List element for all threads list. */
+    int64_t wakeupTime; /*wakeup time*/
 
     /* Shared between thread.c and sempahore.c. */
     struct list_elem elem; /* List element. */
@@ -106,7 +115,10 @@ struct thread {
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+bool list_less(const struct list_elem* a, const struct list_elem* b, void* aux);
+
 void thread_init(void);
+void thread_check(void);
 void thread_start(void);
 
 void thread_tick(void);
@@ -131,10 +143,14 @@ void thread_foreach(thread_action_func *, void *);
 
 int thread_get_priority(void);
 void thread_set_priority(int);
+void thread_priority_donate(struct thread *t, struct thread *t2,struct list_elem elem);
+void thread_priority_restore(struct thread *t,struct list_elem elem);
 
 int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
+void thread_sleep(struct thread *);
+void thread_wake(void);
 
 #endif /* threads/thread.h */

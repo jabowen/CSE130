@@ -36,6 +36,7 @@
 #include "threads/semaphore.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+//#include "threads/lock.h"
 
 /* 
  * Initializes semaphore SEMA to VALUE.  A semaphore is a
@@ -52,7 +53,7 @@ semaphore_init(struct semaphore *sema, unsigned value)
 {
     ASSERT(sema != NULL);
 
-    sema->value = value;
+    sema->value = value; 
     list_init(&sema->waiters);
 }
 
@@ -73,12 +74,36 @@ semaphore_down(struct semaphore *sema)
 
     enum intr_level old_level = intr_disable();
     while (sema->value == 0) {
+        //list_insert_ordered(&sema->waiters, &thread_current()->elem, list_less, NULL);
         list_push_back(&sema->waiters, &thread_current()->elem);
         thread_block();
     }
     sema->value--;
+    thread_check();
     intr_set_level(old_level);
 }
+
+void
+semaphore_down_lock(struct semaphore *sema, struct thread *t, struct list_elem elem)
+{
+    ASSERT(sema != NULL);
+    ASSERT(!intr_context());
+
+    enum intr_level old_level = intr_disable();
+    while (sema->value == 0) {
+        list_push_back(&sema->waiters, &thread_current()->elem);
+        list_sort(&sema->waiters, list_less, NULL);
+        struct thread *front = list_entry(list_begin(&sema->waiters), struct thread, elem);
+        if(!(t==NULL)){
+          thread_priority_donate(t,front,elem);
+        }
+        thread_block();
+    }
+    sema->value--;
+    //thread_check();
+    intr_set_level(old_level);
+}
+
 
 /* 
  * Down or Dijkstra's "P" operation on a semaphore, but only if the
@@ -120,9 +145,10 @@ semaphore_up(struct semaphore *semaphore)
 
     old_level = intr_disable();
     if (!list_empty(&semaphore->waiters)) {
-        thread_unblock(list_entry(
-            list_pop_front(&semaphore->waiters), struct thread, elem));
+        list_sort(&semaphore->waiters, list_less, NULL);
+        thread_unblock(list_entry(list_pop_front(&semaphore->waiters), struct thread, elem));
     }
     semaphore->value++;
+    thread_check();
     intr_set_level(old_level);
 }

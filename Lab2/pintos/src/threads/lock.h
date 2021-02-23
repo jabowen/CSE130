@@ -2,11 +2,14 @@
 #define LOCK_H
 
 #include "threads/semaphore.h"
+//#include <uuid/uuid.h>
 
 /* Lock */
 struct lock {
     struct thread *holder; /* Thread holding lock (for debugging) */
+    struct list_elem elem;
     struct semaphore semaphore; /* Binary semaphore controlling access */
+    int id[3];
 };
 
 void lock_init(struct lock *);
