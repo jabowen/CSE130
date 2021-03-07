@@ -54,6 +54,13 @@ static void syscall_handler(struct intr_frame *);
 
 static void write_handler(struct intr_frame *);
 static void exit_handler(struct intr_frame *);
+static void create_handler(struct intr_frame *);
+static void open_handler(struct intr_frame *);
+static void close_handler(struct intr_frame *);
+static void read_handler(struct intr_frame *);
+static void filesize_handler(struct intr_frame *);
+static void exec_handler(struct intr_frame *);
+static void wait_handler(struct intr_frame *);
 
 void
 syscall_init (void)
@@ -87,6 +94,34 @@ syscall_handler(struct intr_frame *f)
     write_handler(f);
     break;
 
+  case SYS_CREATE:
+    create_handler(f);
+    break;
+
+  case SYS_OPEN:
+    open_handler(f);
+    break;
+
+  case SYS_CLOSE:
+    close_handler(f);
+    break;
+
+  case SYS_READ:
+    read_handler(f);
+    break;
+
+  case SYS_FILESIZE:
+    filesize_handler(f);
+    break;
+
+  case SYS_EXEC:
+    exec_handler(f);
+    break;
+
+  case SYS_WAIT:
+    wait_handler(f);
+    break;
+
   default:
     printf("[ERROR] system call %d is unimplemented!\n", syscall);
     thread_exit();
@@ -99,6 +134,15 @@ syscall_handler(struct intr_frame *f)
 void sys_exit(int status) 
 {
   printf("%s: exit(%d)\n", thread_current()->name, status);
+  //printf("%d\n",status);
+  struct thread *p=thread_current()->parent;
+  if(p){
+    p->ch[p->chL]=thread_current()->tid;
+    p->chES[p->chL]=status;
+    //p->p[p->chL]=thread_current()->parent->tid;
+    p->chL=(p->chL+1)%20;
+    //printf("%d(%d,%d,%d,%d)\n",p->tid,p->chL, p->ch[p->chL-1], p->chES[p->chL-1],p->p[p->chL-1]);
+  }
   thread_exit();
 }
 
@@ -124,6 +168,11 @@ static uint32_t sys_write(int fd, const void *buffer, unsigned size)
     putbuf(buffer, size);
     ret = size;
   }
+  struct file *f=thread_current()->files[fd-3];
+  if(f&&fd>2&&fd-3<20){
+    file_write(f,buffer,size);
+    ret = size;
+  }
 
   return (uint32_t) ret;
 }
@@ -140,4 +189,134 @@ static void write_handler(struct intr_frame *f)
 
     f->eax = sys_write(fd, buffer, size);
 }
+
+static uint32_t sys_read(int fd, void *buffer, unsigned size)
+{
+  umem_check((const uint8_t*) buffer);
+  umem_check((const uint8_t*) buffer + size - 1);
+
+  int ret = -1; 
+
+  struct file *f=thread_current()->files[fd-3];
+  if(f&&fd>2&&fd-3<20){
+    file_read(f,buffer,size);
+    ret = size;
+  }
+
+  return (uint32_t) ret;
+}
+
+static void read_handler(struct intr_frame *f)
+{
+    int fd;
+    void *buffer;
+    unsigned size;
+
+    umem_read(f->esp + 4, &fd, sizeof(fd));
+    umem_read(f->esp + 8, &buffer, sizeof(buffer));
+    umem_read(f->esp + 12, &size, sizeof(size));
+
+    f->eax = sys_read(fd, buffer, size);
+}
+
+
+static bool sys_create(const char *fname, int size){
+  umem_check((const uint8_t*) fname);
+  return filesys_create(fname, size, false);
+}
+
+static void create_handler(struct intr_frame *f){
+  const char *fname;
+  int size;
+
+  umem_read(f->esp + 4, &fname, sizeof(fname));
+  umem_read(f->esp + 8, &size, sizeof(size));
+
+  f->eax = sys_create(fname, size);
+}
+
+static int sys_filesize(int fd){
+  struct file *f=thread_current()->files[fd-3];
+  if(f&&fd>2&&fd-3<20){
+    return file_length(f);
+  }
+  return -1;
+}
+
+static void filesize_handler(struct intr_frame *f){
+  int fd;
+
+  umem_read(f->esp + 4, &fd, sizeof(fd));
+
+  f->eax = sys_filesize(fd);
+}
+
+static int sys_open(char *fname){
+  umem_check((const uint8_t*) fname);
+  struct file *newFile;
+  newFile=filesys_open(fname);
+  if(!newFile){
+    return -1;
+  }
+  for(int i=0;i<20;i++){
+    if(thread_current()->files[i]==NULL){
+      thread_current()->files[i]=newFile;
+      return i+3;
+    }
+  }
+  return -1;
+}
+
+static void open_handler(struct intr_frame *f){
+  char *fname;
+
+  umem_read(f->esp + 4, &fname, sizeof(fname));
+
+  f->eax = sys_open(fname);
+}
+
+static int sys_exec(char *fname){
+  return process_execute(fname);
+}
+
+
+static void exec_handler(struct intr_frame *f){
+  char *fname;
+
+  umem_read(f->esp + 4, &fname, sizeof(fname));
+
+  f->eax = sys_exec(fname);
+}
+
+static int sys_wait(int tid){
+  return process_wait(tid);
+}
+
+
+static void wait_handler(struct intr_frame *f){
+  int tid;
+
+  umem_read(f->esp + 4, &tid, sizeof(tid));
+
+  f->eax = sys_wait(tid);
+}
+
+
+static int sys_close(int fd){
+  if(thread_current()->files[fd]!=NULL){
+    thread_current()->files[fd]=NULL;
+    return 0;
+  }
+  return -1;
+}
+
+static void close_handler(struct intr_frame *f){
+  int fd;
+
+  umem_read(f->esp + 4, &fd, sizeof(fd));
+
+  f->eax = sys_close(fd);
+}
+
+
 

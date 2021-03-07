@@ -70,10 +70,74 @@ static bool load(const char *cmdline, void (**eip) (void), void **esp);
 static void
 push_command(const char *cmdline UNUSED, void **esp)
 {
-    printf("Base Address: 0x%08x\n", (unsigned int) *esp);
-
+    //printf("Base Address: 0x%08x\n", (unsigned int) *esp);
+    int offset=0;
     // Word align with the stack pointer. 
-    *esp = (void*) ((unsigned int) (*esp) & 0xfffffffc);
+    //*esp = (void*) ((unsigned int) (*esp) & 0xfffffffc);
+    //push argv[0]
+    int argc=0;
+    char arg[255];
+    char targ[255];
+    int i=0;
+    int j=0;
+    int sizes[255];
+    int dblSpace=0;
+    for(i=strlen(cmdline)-1;i>=0;i--){
+      if(!(dblSpace&&cmdline[i]==' ')){
+        dblSpace=0;
+        arg[j]=cmdline[i];
+        if(cmdline[i]==' '||cmdline[i]=='\0'){
+          dblSpace=1;
+          sizes[argc]=j+1;
+          targ[j]='\0';
+          argc++;
+          offset+=j+1;
+          for(int k=0; k<j; k++){
+           targ[k]=arg[j-k-1]; 
+          }
+          *esp-=j+1;
+          memcpy(*esp,targ,j+1);
+          j=-1;
+        }
+        j++;
+      }
+    }
+    sizes[argc]=j+1;
+    offset+=j+1;
+    targ[j]='\0';
+    argc++;
+    for(int k=0; k<j; k++){
+      targ[k]=arg[j-k-1];
+    }
+    *esp-=j+1;
+    memcpy(*esp,targ,j+1);
+
+    //word align
+    //*esp = (void*) ((unsigned int) (*esp) & 0xfffffffc);
+    while(offset%4!=0){
+      *esp-=1;
+      offset+=1;
+    }
+    //push Null sentinal
+    *esp-=4;
+    offset+=4;
+    *((char*) *esp)=NULL;
+    //push address of argv[0]
+    for(i=0; i<argc; i++){
+      *esp-=4;
+      offset+=4;
+      offset-=sizes[i];
+      *((char**) *esp)=*esp+offset;
+    }
+    //push address of argv
+    *esp-=4;
+    *((char**) *esp)=(*esp+4);
+    //push argc
+    *esp-=4;
+    *((int*) *esp)=argc;
+    //push fake return
+    *esp-=4;
+    *((int*) *esp)=NULL;
 
     // Some of your CSE130 Lab 3 code will go here.
     //
@@ -102,10 +166,22 @@ process_execute(const char *cmdline)
         return TID_ERROR;
 
     strlcpy(cmdline_copy, cmdline, PGSIZE);
+    //added this, not sure of right, create should have cmdline
+    char cmd[255];
+    int i=0;
+    while(cmdline[i]!=' '&&cmdline[i]!='\0'){
+      cmd[i]=cmdline[i];
+      i++;
+    }
+    cmd[i]='\0';
+    
+    tid_t tid = thread_create(cmd, PRI_DEFAULT, start_process, cmdline_copy);
 
-    // Create a Kernel Thread for the new process
-    tid_t tid = thread_create(cmdline, PRI_DEFAULT, start_process, cmdline_copy);
-
+    
+    semaphore_down(&thread_current()->exec);
+    semaphore_down(&thread_current()->exec);
+    semaphore_up(&thread_current()->exec);
+    
     // CSE130 Lab 3 : The "parent" thread immediately returns after creating 
     // the child. To get ANY of the tests passing, you need to synchronise the 
     // activity of the parent and child threads.
@@ -113,7 +189,7 @@ process_execute(const char *cmdline)
     return tid;
 }
 
-/* 
+/* `
  * A thread function to load a user process and start it running. 
  * CMDLINE is assumed to contain an executable file name with no arguments.
  * If arguments are passed in CMDLINE, the thread will exit imediately.
@@ -121,6 +197,7 @@ process_execute(const char *cmdline)
 static void
 start_process(void *cmdline)
 {
+    //void *cmdline=((struct procArgs*)args)->cmdline;
     // Initialize interrupt frame and load executable. 
     struct intr_frame pif;
     memset(&pif, 0, sizeof pif);
@@ -129,12 +206,22 @@ start_process(void *cmdline)
     pif.cs = SEL_UCSEG;
     pif.eflags = FLAG_IF | FLAG_MBS;
 
-    bool success = load(cmdline, &pif.eip, &pif.esp);
+    char cmd[255];
+    int i=0;
+    char *line =(char *) cmdline;
+    while(line[i]!=' '&&line[i]!='\0'){
+      cmd[i]=line[i];
+      i++;
+    }
+    cmd[i]='\0';
+    //printf("\n\n%s\n",cmd);
+    bool success = load(cmd, &pif.eip, &pif.esp);
     if (success) {
         push_command(cmdline, &pif.esp);
     }
     palloc_free_page(cmdline);
 
+    semaphore_up(&thread_current()->parent->exec);
     if (!success) {
         thread_exit();
     }
@@ -158,8 +245,31 @@ start_process(void *cmdline)
    For now, it does nothing. */
 int
 process_wait(tid_t child_tid UNUSED)
-{
-    return -1;
+{ 
+  struct list *l=&thread_current()->children;
+  struct list_elem *i=list_begin(l);
+  struct thread *child;
+  for(i=list_begin(l); i!=list_end(l); i=list_next(i)){
+    child = list_entry(i, struct thread, child_elem);
+    if(child->tid==child_tid){
+      if(child->pWait==1){
+        break;
+      }
+      child->pWait=1;
+      semaphore_down(&thread_current()->exec);
+      semaphore_down(&thread_current()->exec);
+      semaphore_up(&thread_current()->exec);
+      break;
+    }
+  }
+  int iTid=child_tid+0;
+  for(int j=0; j<20; j++){
+    if(thread_current()->ch[j]==iTid){
+      thread_current()->ch[j]=-1;
+      return thread_current()->chES[j];
+    }
+  } 
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -167,6 +277,11 @@ void
 process_exit(void)
 {
     struct thread *cur = thread_current();
+    if(cur->pWait){
+      cur->pWait=0;
+      semaphore_up(&cur->parent->exec);
+    }
+    list_remove(&cur->child_elem);
     uint32_t *pd;
 
     /* Destroy the current process's page directory and switch back

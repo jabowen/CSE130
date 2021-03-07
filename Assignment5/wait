@@ -1,0 +1,19 @@
+Usage: ./scheduler <options> <algorithm>
+
+options are:
+   -h, --help      show this message
+   -l, --license   show license information
+   -v, --verbose   verbose output
+   -t <int>        number of threads (default : 4)
+   -q <int>        round-robin quantum (default : 4, min 1)
+
+algorithm is one of:
+   --fcfs          First Come First Served (default)
+   --rr            Round Robin
+   --np-priority   Non-Preemptive Priority
+   --p-priority    Preemptive Priority
+   --np-sjf        Non-Preemptive Shortest Job First
+   --p-sjf         Preemptive Shortest Job First
+   --np-srtf       Non-Preemptive Shortest Remaining Time First
+   --p-srtf        Preemptive Shortest Remaining Time First
+

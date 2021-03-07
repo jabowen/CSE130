@@ -36,6 +36,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/semaphore.h"
+#include "filesys/file.h"
 
 #ifdef VM
 #include "vm/page.h"
@@ -138,6 +140,18 @@ struct thread
     uint32_t *pagedir;     // Pointer to the page directory
     uint8_t *current_esp;  // "Executable Stack Pointer" 
                            // i.e the current value of the user program’s stack pointer
+    struct semaphore exec;
+    struct thread *parent;
+    struct file *files[20];
+    struct list children;
+    struct list_elem child_elem;
+    int pWait;
+    int cWaitStat;
+    int ch[20];
+    int chES[20];
+    int p[20];
+    int chL;
+
     struct dir *cwd;	   // Current Working Directory, if any
 
     // Owned by thread.c. 

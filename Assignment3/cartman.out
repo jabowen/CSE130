@@ -1,0 +1,18 @@
+** Random Test **
+CART  2 on Black  track between junctions E and A
+CART  1 on Green  track between junctions C and B
+CART  7 on Black  track between junctions E and A
+CART  9 on Green  track between junctions C and B
+CART 11 on Black  track between junctions E and A
+CART 10 on Green  track between junctions B and C
+CART 13 on Black  track between junctions E and A
+CART  0 on Blue   track between junctions C and D
+CART  3 on Red    track between junctions A and B
+CART  6 on Yellow track between junctions E and D
+CART  5 on Red    track between junctions A and B
+CART  4 on Blue   track between junctions D and C
+CART 14 on Red    track between junctions A and B
+CART 12 on Red    track between junctions A and B
+CART  8 on Red    track between junctions A and B
+PASS All carts crossed safely in 8.87 seconds
+    Functional: FAIL   (program error)
